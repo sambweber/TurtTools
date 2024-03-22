@@ -25,3 +25,5 @@ Imports:
     rlang,
     tidybayes,
     tidyr
+URL: https://github.com/sambweber/TurtTools
+BugReports: https://github.com/sambweber/TurtTools/issues
