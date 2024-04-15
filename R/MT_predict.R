@@ -298,15 +298,15 @@ get_phenology.phenology_model = function(object,..., draws = 1000, days){
 
 get_phenology.phenology_df = function(object,what,by_site = TRUE,...,draws = 1000, days){
 
-  if(!has_name(object,'predict')) obj = predict(object,draws = draws,days = days, full.posterior=TRUE)
+  if(!has_name(object,'predict')) object = predict(object,draws = draws,days = days, full.posterior=TRUE)
 
-  if(by_site==FALSE & has_name(object,'beach')) obj = merge_sites(obj)
+  if(by_site==FALSE & has_name(object,'beach')) object = merge_sites(object)
 
   for(i in what){
-    obj = mutate(obj, !!i := purrr::map(predict,get_phenology,what=i,by_site=by_site,...))
+    object = mutate(object, !!i := purrr::map(predict,get_phenology,what=i,by_site=by_site,...))
   }
 
-  dplyr::select(obj,any_of(c('season','beach',what)))
+  dplyr::select(object,any_of(c('season','beach',what)))
 
 }
 
