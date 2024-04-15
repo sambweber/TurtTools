@@ -258,7 +258,7 @@ daily_means = function(preds,by_site=T,interval = 0.95,what = c('counts','propor
 get_phenology = function(object,what, by_site = TRUE,CI = 0.95, full.posterior = FALSE, draws = 1000, days,
                          quantile = c(0.025,0.975)) {
 
-  .v = c('daily.means','daily.proportions','annual.totals','quantiles')
+  .v = c('daily.means','daily.proportions','annual.totals','annual.proportions','quantiles')
   if(!all(what %in% .v)) stop (paste("'what' must be:", paste(.v,collapse=', ')))
 
   UseMethod("get_phenology")
@@ -366,19 +366,13 @@ annual.totals = function(preds,by_site=T,CI=0.95,full.posterior=F,...){
 annual.proportions = function(preds,by_site=T,CI=0.95,interval=0.95,full.posterior=F,...){
 
   group_by(preds,y.var,.draw) %>%
-
-    {if(has_name(preds,'beach')){
-        group_by(.,beach,.add=T) %>%
-        summarise(N = sum(N),.groups = 'keep')
-        ungroup(beach) %>%
-        mutate(proportion = N/sum(N)) %>%
-        group_by(beach,.add=T)
-      } else {
-        summarise(N = sum(N),.groups = 'keep')
-      }
-    } %>%
-
-    {if(!full.posterior){
+    {if(has_name(preds,'beach')) group_by(.,beach,.add=T) else .} %>%
+     summarise(N = sum(N),.groups = 'keep') %>%
+     group_by(y.var,.draw) %>%
+     mutate(proportion = N/sum(N)) %>% 
+     {if(has_name(preds,'beach')) group_by(.,beach,.add=T) else .} %>%
+     
+     {if(!full.posterior){
       ungroup(.,.draw) %>%
         tidybayes::mean_qi(proportion,.width = interval) %>%
         dplyr::select(-(.width:.interval))
