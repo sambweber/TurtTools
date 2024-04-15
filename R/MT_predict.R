@@ -35,15 +35,11 @@ MT_sample = function(model,n = 2000,pars){
 # Function for predicting mean and values from fitted model
 # ----------------------------------------------------------------------------------
 
-# This currently matches column positions to argument names in meanFnNimm, but it won't work
-# if meanFnNim has a different number of arguments e.g. a different functional form as
-# we expand the code later.... we could this do this by collapsing the args to a list in a do.call maybe
-# This is the better way of doing this using column-argument matching:
-# MT_sample(model,samples) %>%
-# mutate(.iter = row_number()) %>%
-# expand_grid(t = days) %>%
-# mutate(total = pmap_dbl(list(!!!rlang::parse_exprs(formalArgs('meanFnNim'))), meanFnNim))
-# Will also enable different mean functions (models) to be passed.
+# The predict function is slightly redundant as it is quite similar to the 'daily.means' function and 
+# depending on whether the preds column is added here or later with the posterior summarised 
+# can create a few issues in the 'get_phenology' code. And we also want to include the observations
+# when full.posterior = FALSE to aid plotting. Maybe the way to do it is to have get_phenology 
+# always re-predict with full posterior before calculating its metrics. 
 #' @export
 
 predict.phenology_model = function(model,days, CI=TRUE, full.posterior=FALSE, draws=2000){
@@ -202,20 +198,6 @@ summary.phenology_df = function(object){
 
 }
 
-# ----------------------------------------------------------------------------------------------------------
-# season_merge: Helper function to combine predictions for all sites within seasons for summarizing
-# ----------------------------------------------------------------------------------------------------------
-
-MT_merge_sites = function(obj){
-
-  if(!all(has_name(obj,c('season','beach')))) stop("obj should be of class MT_tbl with a 'season' and 'beach' column")
-
-  condense = function(.x) list(setNames(.x,obj$beach) %>% bind_rows(.id = 'beach'))
-  group_by(obj,season) %>%
-    summarise(across(any_of(c('data','summary','predict')),condense),
-              across(any_of('fit'),list))
-
-}
 
 # ----------------------------------------------------------------------------------------------------------
 # daily_means: Returns the mean and credible interval for counts on each day/site for plotting seasonal trends
