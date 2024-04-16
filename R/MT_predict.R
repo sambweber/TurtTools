@@ -159,8 +159,6 @@ plot.MTpred <- function(obj,by_site=T,colour = c(nests='orange',activities='blue
 }
 
 
-
-
 # ---------------------------------------------------------------------------------------------------------------------------------------
 # summary.MTfit: summary method for MTfit
 # ---------------------------------------------------------------------------------------------------------------------------------------
@@ -233,7 +231,6 @@ daily_means = function(preds,by_site=T,interval = 0.95,what = c('counts','propor
 # it up.
 
 #'
-#'
 #' @export
 #'
 
@@ -248,20 +245,18 @@ get_phenology = function(object,what, by_site = TRUE,CI = 0.95, full.posterior =
 }
 
 #'
-#'
 #' @export
 #'
 
 get_phenology.MTpred = function(object,what, CI = 0.95, by_site = TRUE,
                                 full.posterior = FALSE){
 
-  # Change to getFromNamespace to make more robust
+  if(!'.draw' %in% names(object)) stop ("get_phenology requires MTpred objects created with 'full.posterior = TRUE")
   .f = getFromNamespace(what,'TurtTools')
   .f(object,CI = CI, by_site = by_site, full.posterior = full.posterior)
 
 }
 
-#'
 #'
 #' @export
 #'
@@ -274,14 +269,19 @@ get_phenology.phenology_model = function(object,..., draws = 1000, days){
 }
 
 #'
-#'
 #' @export
 #'
 
 get_phenology.phenology_df = function(object,what,by_site = TRUE,...,draws = 1000, days){
 
-  if(!has_name(object,'predict')) object = predict(object,draws = draws,days = days, full.posterior=TRUE)
+  if(!fit %in% names(object)) stop('get_phenology requires a column of fitted phenology models: use fit_phenology first')
 
+  # Add a prediction column if it is missing
+  if('predict' %in% names(object) & !'.draw' %in% names(object$predict[[1]])){
+    object = predict(object,draws = draws,days = days, full.posterior=TRUE)
+  }
+  if(!has_name(object,'predict') object = predict(object,draws = draws,days = days, full.posterior=TRUE)
+     
   if(by_site==FALSE & has_name(object,'beach')) object = merge_sites(object)
 
   for(i in what){
@@ -326,9 +326,7 @@ daily.proportions = function(preds,by_site=T,CI=0.95,...){
 
 
 annual.totals = function(preds,by_site=T,CI=0.95,full.posterior=F,...){
-
-  if(!inherits(preds,'MTpred')) stop ('predictions should be an MTpred object')
-
+  
   preds =
     group_by(preds,y.var,.draw) %>%
     {if(by_site & 'beach' %in% names(.)) group_by(.,beach,.add=T) else .} %>%
@@ -345,7 +343,7 @@ annual.totals = function(preds,by_site=T,CI=0.95,full.posterior=F,...){
 }
 
 # Need to adjust this to cope with cases with or without site names.
-annual.proportions = function(preds,by_site=T,CI=0.95,interval=0.95,full.posterior=F,...){
+annual.proportions = function(preds,by_site=T,CI=0.95,full.posterior=F,...){
 
   group_by(preds,y.var,.draw) %>%
     {if(has_name(preds,'beach')) group_by(.,beach,.add=T) else .} %>%
@@ -356,7 +354,7 @@ annual.proportions = function(preds,by_site=T,CI=0.95,interval=0.95,full.posteri
      
      {if(!full.posterior){
       ungroup(.,.draw) %>%
-        tidybayes::mean_qi(proportion,.width = interval) %>%
+        tidybayes::mean_qi(proportion,.width = CI) %>%
         dplyr::select(-(.width:.interval))
     } else .} %>%
 
@@ -367,12 +365,14 @@ annual.proportions = function(preds,by_site=T,CI=0.95,interval=0.95,full.posteri
 # Check how this one works across multiple sites....might need to group by day too
 quantiles = function(preds,by_site=T,CI=0.95,full.posterior=F,quantile = c(0.025,0.975),...){
 
-  group_by(preds,y.var,.draw) %>%
+  group_by(preds,y.var,.draw,day) %>%
     {if(by_site & has_name(preds,'beach')) group_by(.,beach,.add=T) else .} %>%
+    summarise(mu = sum(mu),.groups='keep') %>%
+    ungroup(day) %>%
     mutate(s = cumsum(mu)/sum(mu)) %>%
     summarise(start = day[s>=quantile[1]][1],
               end = day[s>=quantile[2]][1],
-              duration=end-start) %>%
+              duration=end-start, .groups = 'keep') %>%
     {if(!full.posterior){
       ungroup(.,.draw) %>%
         tidybayes::mean_qi(start,end,duration,.width = CI) %>%
