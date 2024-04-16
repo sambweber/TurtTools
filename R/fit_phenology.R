@@ -32,9 +32,10 @@ phenology.omeyer <- nimble::nimbleFunction(
 #' @export
 
 phenology.girondot <- nimble::nimbleFunction(
-  run = function(t = double(0), E = double(0), B = double(0), Max = double(0),
-                 MinE = double(0), MinB = double(0),tf = double(0), tp = double(0)) {
-
+  run = function(t = double(0), B = double(0), E = double(0,default=0), Max = double(0),
+                 MinE = double(0,default=0), MinB = double(0,default=0),tf = double(0,default=0), tp = double(0)) {
+    
+    if(E == 0) E = tp + (tp - B) 
     pi = 3.141593
     if(t < B){ mu <- MinB} else {
       if(t < (tp - tf)) {
@@ -57,12 +58,16 @@ phenology.girondot <- nimble::nimbleFunction(
 )
 
 # tibble(t = 1:365) %>%
-# mutate(N = map_dbl(t,~phenology.model(.x, MinE=10, MinB=2, B = 58, E = 200, tp = 110, tf = 8, Max = 400)))
+# mutate(N = map_dbl(t,~phenology.girondot(.x, B = 20, tp = 110, Max = 400)))
 
 # -----------------------------------------------------------------------
 # MT_NimModel: Basic code for the NIMBLE model
 # -----------------------------------------------------------------------
 
+# By fixing some parameters to zero in this code (e.g. tf and s2) we could fit a range 
+# of different possible shapes. In the priors section rather than stochastic, we make
+# some determininstic nodes with values = 0, depending on which parameters are specified in the run
+# function. 
 # Generates `nimbleCode` for fitting the Omeyer et al. 2022 model in `Nimble`
 
 MT_NimModel <- nimble::nimbleCode({
@@ -87,6 +92,7 @@ MT_NimModel <- nimble::nimbleCode({
 
       tf[r,b] ~ dexp(0.2)
       phi[r,b] ~ T(dinvgamma(shape = 1, rate = 0.1), , 50)
+      
       s_rate[r,b] ~ dunif(0.01, 10)
       s1[r,b] ~ dexp(s_rate[r,b])
       s2[r,b] ~ dexp(s_rate[r,b])
@@ -100,6 +106,100 @@ MT_NimModel <- nimble::nimbleCode({
   }
 
 })
+
+# ------------------------------------------------------------------------------------------------------------------
+# New code below to adapt the base model depending on different model parameterisations. Here
+# model is either 'phenology.omeyer' or 'phenology.girondot'. Ultimately we need to implement this 
+# throughout and replace the likelihood statement above with the word "FUNC" so that it can be adapted above
+# also have a function to generate the priors for different models
+# -------------------------------------------------------------------------------------------------------------------
+
+# The only priors that vary between the two models are B/E abd s1/s2 so these are the only bits we need to worry about. 
+# Returns a nimbleCode type object. This way users can also supply 'nimbleCode' with custom priors.
+
+phenology_priors = function(model, params){
+  
+# Priors that are common to all
+p =   "alpha_mn[r,b] ~ dexp(1)
+      alpha_rate[r,b] <- 1 / alpha_mn[r,b]
+      alpha[r,b] ~ dexp(alpha_rate[r,b])
+
+      tf[r,b] ~ dexp(0.2)
+      phi[r,b] ~ T(dinvgamma(shape = 1, rate = 0.1), , 50)
+
+      tp[r,b] ~ dunif(0,365)"
+
+# Priors just for Omeyer
+if(model == 'phenology.omeyer'){
+
+p = paste(p,
+      "\ns_rate[r,b] ~ dunif(0.01, 10)
+      s1[r,b] ~ dexp(s_rate[r,b])
+      s2[r,b] ~ dexp(s_rate[r,b])"
+     )
+}
+
+# Priors just for Girondot
+if(model == 'phenology.girondot'){
+
+p = paste(p,
+      "\nB[r,b] ~ T(dunif(0,365), , alpha[r,b])
+       E[r,b] ~ T(dunif(0,365), alpha[r,b],)"  
+      )
+    
+}
+
+unlist(stringi::stri_split_lines(p,TRUE)) %>%
+lapply(str2lang) %>%
+c(quote(`{`),.) %>%
+as.call()
+    
+}
+
+
+phenology_likelihood <- function(){
+  
+  nimble::nimbleCode({
+
+  for(r in 1:R){
+    for(i in 1:N) {
+      for(j in 1:nt[i]) {
+        mu[i, j, r] <- FUNC
+      }
+      Y[i,r] ~ dSnbinomNim(phi[r,bch[i]], mu[i, ,r], nt[i])
+    }
+  }
+
+})
+}
+  
+# Now a function to build the blocks
+
+phenology_model = function(model,params = NULL){
+
+ args = formalArgs(model) %>% subset(.!='t')   
+ if(is.null(params)) params = args 
+ fixed.pars = setdiff(args,params) 
+   
+ priors = phenology_priors(model) %>%
+          deparse(width.cutoff=500) %>% 
+          head(-1) %>% tail(-1) %>%
+          {if(length(fixed.pars)) subset(!grepl(paste(fixed.pars,collapse='|'),.)) else .} %>%
+          c('for(r in 1:R){','for(b in 1:B){',.,'}','}')
+  
+ lik = paste(paste0(model,'(t[i, j],'), paste(paste0(params,'=',params,'[r,bch[i]]'), collapse = ', '),')')
+  
+  m = deparse(phenology_likelihood(),width.cutoff = 500) %>%
+      head(-1) %>% tail(-1) %>%
+      gsub('FUNC',lik,.) %>%
+      c(priors) %>%
+      parse(text=.) %>%
+      c(quote(`{`),.) %>%
+      as.call()
+
+ return(m)
+
+}
 
 
 # ----------------------------------------------------------------------------------
@@ -273,6 +373,7 @@ MT_initialize <- function(model, tp.min, tp.max, smin, smax, attempts = 100) {
 
 #' It should be possible to get this model to only fit certain parameters using the 'parameters.to.monitor' argument, with
 #' other values fixed to zero (e.g. for flattening) or s1 = s2 for symmetrical.
+#' Use fixed = setdiff(formalArgs(phenology.omeyer),params) %>% subset(.!='t') to find parameters to fix at 0 
                         
 #' @param model A model created by MT_make_model
 
