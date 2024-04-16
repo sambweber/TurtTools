@@ -4,12 +4,14 @@
 # -----------------------------------------------------------------------------
 
 #' Returns a numbleFunction implementing the Omeyer et al. 2022 model of mean number of counts
-#' as a function of days.
+#' as a function of days. By default this fits a 3-parameter symmetrical curve with no flattening
 #' @export
 
 phenology.omeyer <- nimble::nimbleFunction(
   run = function(t = double(0), alpha = double(0), s1 = double(0),
-                 s2 = double(0), tf = double(0), tp = double(0)) {
+                 s2 = double(0,default=0), tf = double(0,default=0), tp = double(0)) {
+
+    if(s2 == 0) s2 = s1 
     if(t < (tp - tf)) {
       mu <- alpha * exp(-((t - tp + tf) / s1)^2)
     } else {
@@ -269,6 +271,9 @@ MT_initialize <- function(model, tp.min, tp.max, smin, smax, attempts = 100) {
 # MT_run_model: Function for compiling and running the nimble model
 # ----------------------------------------------------------------------------------------------------------------
 
+#' It should be possible to get this model to only fit certain parameters using the 'parameters.to.monitor' argument, with
+#' other values fixed to zero (e.g. for flattening) or s1 = s2 for symmetrical.
+                        
 #' @param model A model created by MT_make_model
 
 #' @param nchains,niter,nburnin,thin Single numerics giving the number of MCMC chains to run, the total number of iterations
@@ -325,8 +330,8 @@ MT_run_model = function(data,nchains=2, niter=40000, nburnin = 10000, thin = 1,
 # MT_fit: Function for running a nimble model across multiple sites/seasons in a nested dataset produced by MT_prep
 # ----------------------------------------------------------------------------------------------------------------
 
-#' This function currently requires that you specify a peak for initialising the model. It would be better it it just self
-#' initialised. We could just use highest value in data or from another model e.g. GAM or maximum likelihood fit of this model.
+#' This function currently requires that you put some bounds on parameters for selecting valid initital values in order
+#' to get it to initialise in any sensible amount of time. 
 #'
 #' @export
 
