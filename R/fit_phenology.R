@@ -4,7 +4,7 @@
 # -----------------------------------------------------------------------------
 
 #' Returns a numbleFunction implementing the Omeyer et al. 2022 model of mean number of counts
-#' as a function of days. By default this fits a 3-parameter symmetrical curve with no flattening
+#' as a function of days. By default this fits a 3-parameter symmetrical curve with no peak flattening
 #' @export
 
 phenology.omeyer <- nimble::nimbleFunction(
