@@ -109,95 +109,53 @@ MT_NimModel <- nimble::nimbleCode({
 
 # ------------------------------------------------------------------------------------------------------------------
 # New code below to adapt the base model depending on different model parameterisations. Here
-# model is either 'phenology.omeyer' or 'phenology.girondot'. Ultimately we need to implement this 
-# throughout and replace the likelihood statement above with the word "FUNC" so that it can be adapted above
-# also have a function to generate the priors for different models
+# model is either 'phenology.omeyer' or 'phenology.girondot'. 
 # -------------------------------------------------------------------------------------------------------------------
 
-# The only priors that vary between the two models are B/E abd s1/s2 so these are the only bits we need to worry about. 
-# Returns a nimbleCode type object. This way users can also supply 'nimbleCode' with custom priors.
+# Priors are specified as a hierarchical named list which allows users to tweak elements
 
-phenology_priors = function(model, params){
-  
-# Priors that are common to all
-p =   "alpha_mn[r,b] ~ dexp(1)
-      alpha_rate[r,b] <- 1 / alpha_mn[r,b]
-      alpha[r,b] ~ dexp(alpha_rate[r,b])
+ phenology_priors = function(model,params=NULL){
+         
+          if(is.null(params)) params = formalArgs(model) %>% subset(.!='t')
+          list(tf = 'tf ~ dexp(0.2)', 
+             phi = 'phi ~ T(dinvgamma(shape = 1, rate = 0.1), , 50)',
+              alpha = list(alpha_mn = 'alpha_mn ~ dexp(1)',
+                           alpha = 'alpha ~ dexp(1/alpha_mn)'),
+              tp = 'tp ~ dunif(0,365)',
+              s1 = list(s_rate = 's_rate ~ dunif(0.01, 10)',
+                        s1 = 's1 ~ dexp(s_rate)'),
+             s2 = 's2 ~ dexp(s_rate)'
+            )[params]           
+ }
+   
 
-      tf[r,b] ~ dexp(0.2)
-      phi[r,b] ~ T(dinvgamma(shape = 1, rate = 0.1), , 50)
-
-      tp[r,b] ~ dunif(0,365)"
-
-# Priors just for Omeyer
-if(model == 'phenology.omeyer'){
-
-p = paste(p,
-      "\ns_rate[r,b] ~ dunif(0.01, 10)
-      s1[r,b] ~ dexp(s_rate[r,b])
-      s2[r,b] ~ dexp(s_rate[r,b])"
-     )
-}
-
-# Priors just for Girondot
-if(model == 'phenology.girondot'){
-
-p = paste(p,
-      "\nB[r,b] ~ T(dunif(0,365), , alpha[r,b])
-       E[r,b] ~ T(dunif(0,365), alpha[r,b],)"  
-      )
-    
-}
-
-unlist(stringi::stri_split_lines(p,TRUE)) %>%
-lapply(str2lang) %>%
-c(quote(`{`),.) %>%
-as.call()
-    
-}
-
-
-phenology_likelihood <- function(){
-  
-  nimble::nimbleCode({
-
-  for(r in 1:R){
-    for(i in 1:N) {
-      for(j in 1:nt[i]) {
-        mu[i, j, r] <- FUNC
-      }
-      Y[i,r] ~ dSnbinomNim(phi[r,bch[i]], mu[i, ,r], nt[i])
-    }
-  }
-
-})
-}
-  
 # Now a function to build the blocks
 
-phenology_model = function(model,params = NULL){
+phenology_model = function(model,params = NULL,priors=NULL){
 
- args = formalArgs(model) %>% subset(.!='t')   
- if(is.null(params)) params = args 
- fixed.pars = setdiff(args,params) 
-   
- priors = phenology_priors(model) %>%
-          deparse(width.cutoff=500) %>% 
-          head(-1) %>% tail(-1) %>%
-          {if(length(fixed.pars)) subset(!grepl(paste(fixed.pars,collapse='|'),.)) else .} %>%
+ if(is.null(params)) params = formalArgs(model) %>% subset(.!='t')
+ if(is.null(priors)) priors = phenology_priors(model,params)
+
+ lik = paste(paste0(model,'(t[i, j],'), paste(paste0(params,'=',params,'[r,bch[i]]'), collapse = ', '),')')
+ lik  = c('for(r in 1:R){', 
+            'for(i in 1:N) {', 
+              'for(j in 1:nt[i]) {',
+                 paste('mu[i, j, r] <-', lik),
+              '}',
+            'Y[i,r] ~ dSnbinomNim(phi[r,bch[i]], mu[i, ,r], nt[i])',
+          '}',
+          '}')
+                
+ priors = unlist(priors) 
+ names = sub('.*\\.', '', names(priors))
+ rep = paste0(names,'[r,b]') %>% setNames(paste0(names,'\\b'))
+ priors = str_replace_all(priors,rep) %>%
           c('for(r in 1:R){','for(b in 1:B){',.,'}','}')
   
- lik = paste(paste0(model,'(t[i, j],'), paste(paste0(params,'=',params,'[r,bch[i]]'), collapse = ', '),')')
-  
-  m = deparse(phenology_likelihood(),width.cutoff = 500) %>%
-      head(-1) %>% tail(-1) %>%
-      gsub('FUNC',lik,.) %>%
-      c(priors) %>%
-      parse(text=.) %>%
-      c(quote(`{`),.) %>%
-      as.call()
-
- return(m)
+ c(lik,priors) %>%
+ parse(text=.) %>%
+ c(quote(`{`),.) %>%
+ as.call()
 
 }
 
