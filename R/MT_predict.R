@@ -280,7 +280,7 @@ get_phenology.phenology_df = function(object,what,by_site = TRUE,...,draws = 100
   if('predict' %in% names(object) & !'.draw' %in% names(object$predict[[1]])){
     object = predict(object,draws = draws,days = days, full.posterior=TRUE)
   }
-  if(!has_name(object,'predict') object = predict(object,draws = draws,days = days, full.posterior=TRUE)
+  if(!has_name(object,'predict')) object = predict(object,draws = draws,days = days, full.posterior=TRUE)
      
   if(by_site==FALSE & has_name(object,'beach')) object = merge_sites(object)
 
