@@ -7,6 +7,8 @@ plot.phenology_df <- function(object,colour = c(nests='orange',activities='blue'
 raw = dplyr::select(object,any_of(c('season','beach','data'))) %>% 
       unnest(data) %>%
       gather(key = 'y.var',value='N.obs',activities,nests)
+
+x.scale = match.arg(x.scale)  
   
 pl = 
   ggplot(raw,aes(x = .data[[x.scale]])) + 
@@ -17,13 +19,14 @@ pl =
   #geom_ribbon(aes(ymin = .lower,ymax = .upper,group = y.var),alpha=.3) +
   #geom_line(aes(colour=y.var)) + 
 
+pl = pl + geom_point(data=raw,aes(y = N.obs,colour=y.var),shape=shape) 
+  
 vars = c('beach','season')
 vars = vars[map_lgl(vars,~length(unique(object[[.x]]))>1)]
+if(!length(vars)) return(pl)
 xfree = ifelse('season' %in% vars & x.scale == 'date', 'free_x', 'fixed')
 vars = paste('~',paste(vars,collapse='+'))
 
-pl + 
-geom_point(data=raw,aes(y = N.obs,colour=y.var),shape=shape) +
-facet_wrap(vars, scales = xfree) 
+pl + facet_wrap(vars, scales = xfree) 
   
 }
