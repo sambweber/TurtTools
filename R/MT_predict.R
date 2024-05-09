@@ -274,7 +274,7 @@ get_phenology.phenology_model = function(object,..., draws = 1000, days){
 
 get_phenology.phenology_df = function(object,what,by_site = TRUE,...,draws = 1000, days){
 
-  if(!fit %in% names(object)) stop('get_phenology requires a column of fitted phenology models: use fit_phenology first')
+  if(!'fit' %in% names(object)) stop('get_phenology requires a column of fitted phenology models: use fit_phenology first')
 
   # Add a prediction column if it is missing
   if('predict' %in% names(object) & !'.draw' %in% names(object$predict[[1]])){
