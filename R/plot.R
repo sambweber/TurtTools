@@ -30,7 +30,7 @@ vars = paste('~',paste(vars,collapse='+'))
 
 # Options for pagination if too many plots to view of one page
 nplots = nrow(object)
-if(!missing(ncol) & !missing(nrow)) pages = nplots(ncol*nrow) else pages = 1
+if(!missing(ncol) & !missing(nrow)) pages = nplots/(ncol*nrow) else pages = 1
 
 if(pages<=1) print(pl + facet_wrap(as.formula(vars), scales = xfree)) else {
   
