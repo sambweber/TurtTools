@@ -2,7 +2,8 @@
 # plot.MTpred: plot method for MTpred
 # --------------------------------------------------------------------------------------------------------------------------------------- 
   
-plot.phenology_df <- function(object,colour = c(nests='orange',activities='blue'),shape=21, x.scale = c('day','date')){
+plot.phenology_df <- function(object,colour = c(nests='orange',activities='blue'),shape=21, x.scale = c('day','date'),
+                              nrow = NULL,ncol = NULL){
  
 raw = dplyr::select(object,any_of(c('season','beach','data'))) %>% 
       unnest(data) %>%
@@ -27,6 +28,14 @@ if(!length(vars)) return(pl)
 xfree = ifelse('season' %in% vars & x.scale == 'date', 'free_x', 'fixed')
 vars = paste('~',paste(vars,collapse='+'))
 
-pl + facet_wrap(vars, scales = xfree) 
+# Options for pagination if too many plots to view of one page
+nplots = nrow(object)
+if(!missing(ncol) & !missing(nrow)) pages = nplots(ncol*nrow) else pages = 1
+
+if(pages<=1) print(pl + facet_wrap(as.formula(vars), scales = xfree)) else {
+  
+  for(i in 1:pages) print(pl+ ggforce::facet_wrap_paginate(as.formula(vars),scales = 'free_y',ncol=ncol,nrow=nrow,page=i)) 
+
+  }
   
 }
